@@ -1,0 +1,523 @@
+import socket
+import os
+import platform
+import getpass
+import time
+import tty
+import termios 
+import sys
+
+#======================================================================================
+
+#create the file
+
+def file():
+    try:
+        with open('security_log.txt', 'w') as file:
+            file.write('\n2026-08-29 10:15:02 | INFO | user=alice | action=login | status=success'
+                       '\n2026-08-29 10:16:21 | INFO | user=bob | action=login | status=failed'
+                       '\n2026-08-29 10:16:25 | INFO | user=bob | action=login | status=failed'
+                       '\n2026-08-29 10:16:29 | INFO | user=bob | action=login | status=failed'
+                       '\n2026-08-29 10:17:01 | INFO | user=bob | action=login | status=success'
+                       '\n2026-08-29 10:20:12 | INFO | user=alice | action=file_access | status=success'
+                       '\n2026-08-29 10:22:43 | INFO | user=charlie | action=login | status=failed'
+                       '\n2026-08-29 10:22:48 | INFO | user=charlie | action=login | status=failed')
+    except PermissionError as error:
+        print('ERROR :', error)
+
+
+file()
+
+#======================================================================================
+
+#read file
+
+def read_file():
+    try:
+        with open('security_log.txt', 'r') as file:
+            content = file.readlines()
+            return content
+    except FileNotFoundError:
+        print('File not found')
+        return []
+result = read_file()
+
+
+#printresult a mettre ici apres
+
+#======================================================================================
+
+#analyze the file
+
+def parse_line(line):
+    part = line.split('|')
+    lines = {
+        'Date_time': part[0].strip().split('=')[0],
+        'Level': part[1].strip().split('=')[0],
+        'User': part[2].strip().split('=')[1],
+        'Action': part[3].strip().split('=')[1],
+        'Status': part[4].strip().split('=')[1],
+    }
+    return lines
+
+
+#======================================================================================
+
+def count_login(all_logs):
+    counter_list = {}
+
+    for log in all_logs:
+        name = log['User']
+
+        if name not in counter_list:
+            counter_list[name] = {
+                'Success': 0,
+                'Failed': 0
+            }
+
+        if log['Action'] == 'login':
+            if log['Status'] == 'success':
+                counter_list[name]['Success'] += 1
+            elif log['Status'] == 'failed':
+                counter_list[name]['Failed'] += 1
+    return counter_list
+
+
+#======================================================================================
+
+# detect suspicious failed 
+
+def detect_suspicious(result_2):
+    alerts = []
+
+    # partie sauvegarde
+
+    for user, stats in result_2.items():
+        if stats['Failed'] >= 3:
+            message = {
+                'Level': "CRITICAL",
+                'User': user,
+                'Failed': stats['Failed']
+            }
+            alerts.append(message)
+
+        elif stats['Failed'] == 2:
+            message_1 = {
+                'Level': "WARNING",
+                'User': user,
+                'Failed': stats['Failed']
+            }
+            alerts.append(message_1)
+
+        elif stats['Failed'] == 1:
+            message_2 = {
+                'Level': "INFO",
+                'User': user,
+                'Failed': stats['Failed']
+            }
+            alerts.append(message_2)
+
+    return alerts
+
+
+#execution ici
+
+#======================================================================================
+
+#infos on the system part
+
+def system_information():
+    print('\n========================================')
+    print('          SYSTEM INFORMATIONS\n========================================')
+
+    system = {
+        'User': getpass.getuser(),
+        'Device': socket.gethostname(),
+        'Operating System': platform.system(),
+        'Version': platform.release(),
+        'Processor': platform.machine(),
+        'Python': platform.python_version()
+    }
+
+    for key, value in system.items():
+        print(key, '|', value)
+
+    return system
+
+#======================================================================================
+
+
+def network_information():
+    print('\n========================================')
+    print('          NETWORK INFORMATIONS\n========================================')
+
+    network = {
+        "Hostname": platform.node(),
+        'IP': socket.gethostbyname(platform.node())
+    }
+
+    for key, value in network.items():
+        print(key, '|', value)
+
+    return network
+
+
+#======================================================================================
+
+def security_check():
+    print('\n========================================')
+    print('          SYSTEM CHECK\n========================================')
+
+    os_release = platform.release()
+    operating_system = platform.system()
+    architecture = platform.machine()
+    python_version = platform.python_version()
+
+    if operating_system == "Windows":
+        os_status = 'Checked'
+    elif operating_system == "Linux":
+        os_status = 'Checked'
+    else:
+        os_status = 'Unverified'
+
+    if architecture in ["AMD64", "x86_64", "aarch64", "ARM64"]:
+        architecture_status = 'Supported'
+    else:
+        architecture_status = 'Unknown'
+
+    if python_version in ['3.12.13', '3.12.11', '3.13.5']:
+        python_version_verified = 'Verified'
+    else:
+        python_version_verified = 'Unknown'
+
+    security = {
+        'Operating system:': operating_system,
+        'OS release:': os_release,
+        'Architecture:': architecture,
+        'OS Status': os_status,
+        'Architecture Status': architecture_status,
+        'Python': python_version,
+        'Python status': python_version_verified
+    }
+
+    for keys, values in security.items():
+        print(keys, '|', values)
+
+    return security
+
+
+#======================================================================================
+
+# the all log base viewing dict
+
+def log_analyzer():
+    all_logs = []
+
+    for line in result:
+        if line.strip() == "":
+            print('')
+        else:
+            analyze_list = (parse_line(line))
+            all_logs.append(analyze_list)
+    return all_logs
+
+
+#======================================================================================
+#report
+def generate_report():
+    
+    system = system_information()
+    network = network_information()
+    security = security_check()
+    all_logs = log_analyzer()
+    result_2 = count_login(all_logs)
+    all_alerts = detect_suspicious(result_2)
+    try:
+        with open('security_report.txt', 'w') as report:
+            report.write("================================================\n")
+            report.write("       BLUE SHIELD LOG ANALYZER REPORT\n")
+            report.write("================================================\n\n")
+    
+            report.write("SYSTEM INFORMATION\n")
+            report.write("------------------------------------------------\n")
+    
+            for key, value in system.items():
+                report.write(f"{key}| {value}\n")
+
+            report.write('NETWORK INFORMATION\n')
+            report.write("------------------------------------------------\n")
+
+            for key, value in network.items():
+                report.write(f"{key}| {value}\n")
+
+            report.write("SECURITY CHECK\n")
+            report.write("------------------------------------------------\n")  
+
+            for key, value in security.items():
+                 report.write(f"{key}| {value}\n")
+
+            report.write('LOGIN STATISTICS\n')
+            report.write("------------------------------------------------\n")
+
+            for i, (name,stats) in enumerate(result_2.items(), start = 1):
+                success = stats['Success']
+                failed = stats['Failed']
+                report.write(f"[{i}] User: {name:<10}| Success : {success} | Failed : {failed}\n")
+
+            report.write('SECURITY ALERTS\n')
+            report.write("------------------------------------------------\n")
+
+            for i, alert in enumerate(all_alerts, start=1):
+                level = alert['Level']
+                user = alert['User']
+                failed = alert['Failed']
+                report.write(f"[{i}] {level:<8} User: {user:<8} | Failed: {failed}\n")
+
+    except PermissionError as error:
+        print('ERROR :', error)
+            
+    except FileExistsError as error:
+        print('ERROR :', error)
+            
+    except FileNotFoundError as error:
+        print('ERROR :', error)
+            
+    except OSError:
+        print('We encountered an error!')
+
+    else:
+        print('Security report successfully generated')
+    finally:
+        print('Security program executed!')
+
+#======================================================================================
+
+def view_report():
+    good_password = "paris"
+    try:
+        password = input('Password:')
+        if password == good_password:
+            with open('security_report.txt', 'r') as file:
+                content = file.read()
+                for line in content:
+                    print(line, end='')
+        else:
+            print('WRONG PASSWORD : ACCESS DENIED!')
+    except FileNotFoundError:
+        print('File not found')
+
+#======================================================================================
+#this part main goal is to read and modify the charachteres to *
+def input_password(show_password=False):
+    fd = sys.stdin.fileno()
+    original_settings = termios.tcgetattr(fd)
+    password = ''
+    try:
+        tty.setraw(fd)
+        while True:
+            char = sys.stdin.read(1)
+            if char == '\n' or  char == '\r':
+                break
+            elif char == '\x7f':
+                if len(password) > 0:
+                    password = password[:-1]
+                    sys.stdout.write('\b' '\b')
+                    sys.stdout.flush()
+            elif char == '\x03':
+                raise KeyboardInterrupt('Keyboard interruption')
+            else:
+                password += char
+
+                if show_password:
+                    print(char, end='', flush=True)
+                else:
+                    print("*", end='', flush=True)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, original_settings)
+        print()
+    return password 
+
+
+        
+
+
+#======================================================================================
+#login part
+
+def login():
+
+    print('===== WELCOME TO BLUE TEAM SHIELD LOG SYSTEM =====')
+    print("================ SECURITY SYSTEM =================")
+    print("Please authenticate!")
+
+    counter = 0
+    correct_password = "agbeka123"
+
+    while counter < 3:
+        show = input("Show password? [y/n]").lower()
+        if show == "y":
+            show_password = True
+        else:
+            show_password = False
+        password = input_password(show_password)
+
+        if password == correct_password:
+            print('Access granted!')
+            return True
+
+        else:
+            counter += 1
+
+            print("Wrong password!")
+            print(f"{3 - counter} attempts left")
+            print("Wait 10 sec before trying again!")
+
+            time.sleep(10)
+
+            print('You can try again')
+
+            if counter == 3:
+                print('Access denied!')
+                print('Wait 30 sec before trying')
+
+                time.sleep(30)
+
+                print('You can try now!')
+                return False
+
+
+#we keep the login system in a value that can be used with if to open the menu
+
+access = login()
+
+#======================================================================================
+
+#menu part
+
+def main_menu():
+    while True:
+        print("\n=====================================")
+        print("       BLUE SHIELD LOG SYSTEM")
+        print("=====================================")
+
+        print("[1] System Information")
+        print("[2] Network Information")
+        print("[3] Security Check")
+        print("[4] Log Analyzer")
+        print("[5] Login statistics")
+        print("[6] Generate Security Report")
+        print("[7] View Saved Reports")
+        print("[8] Security Alerts")
+        print("[9] Exit")
+
+        choice = input('Select an option:')
+
+        try:
+#----------------------------------------------------------------------------------------------
+
+            if choice == "1":
+                system_information()
+
+#----------------------------------------------------------------------------------------------
+
+            elif choice == "2":
+                network_information()
+
+#----------------------------------------------------------------------------------------------
+
+            elif choice == "3":
+                security_check()
+
+#----------------------------------------------------------------------------------------------
+
+            elif choice == "4":
+                all_logs = log_analyzer()
+        
+                print("\n==============================================================")
+                print("                         ALL LOGS")
+                print("==============================================================")
+        
+                for i, log in enumerate(all_logs, start=1):
+                    print(
+                        f"[{i}] {log['Date_time']} | "
+                        f"{log['Level']} | "
+                        f"User: {log['User']:<8} | "
+                        f"Action: {log['Action']:<12} | "
+                        f"Status: {log['Status']}"
+                    )
+        
+                print("==============================================================")
+
+#----------------------------------------------------------------------------------------------
+
+            elif choice == "5":
+                all_logs = log_analyzer()
+                result_2 = count_login(all_logs)
+
+                print('\n================================================')
+                print('          FAILED AND SUCCESS LIST\n================================================')
+
+                for i, (name,stats) in enumerate(result_2.items(), start = 1):
+
+                    success = stats['Success']
+                    failed = stats['Failed']
+
+                    print(f"[{i}] User: {name:<10}| Success : {success} | Failed : {failed}")
+
+                print('================================================')
+
+#----------------------------------------------------------------------------------------------
+
+            elif choice == "8":
+                all_logs = log_analyzer()
+                result_2 = count_login(all_logs)
+        
+                all_alerts = detect_suspicious(result_2)
+         
+                print('\n========================================')
+                print('          SECURITY ALERTS')
+                print('========================================')
+        
+                for i, alert in enumerate(all_alerts, start=1):
+                    level = alert['Level']
+                    user = alert['User']
+                    failed = alert['Failed']
+        
+                    print(f"[{i}] {level:<8} User: {user:<8} | Failed: {failed}")
+        
+                print('========================================')
+
+#----------------------------------------------------------------------------------------------
+
+            elif choice == "9":
+                print('\n===END OF THE PROGRAM===')
+                print('\n================================')
+                print('PRODUCED BY PARIS')
+                print('THANKS FOR USING MY PROGRAM')
+                print('================================')
+                break
+
+#----------------------------------------------------------------------------------------------
+
+            elif choice == "6":
+                generate_report()
+
+#----------------------------------------------------------------------------------------------
+            elif choice == "7":
+                view_report()
+#----------------------------------------------------------------------------------------------
+
+            else:
+                raise ValueError('Invalid menu choice : Try again')
+        except ValueError as error:
+            print('ERROR :', error)
+#----------------------------------------------------------------------------------------------
+
+#give the access to the menu or not
+if access == True:
+    main_menu()
+elif access == False:
+    print('WARNING : ACCESS BLOCKED')
+
+print("Current directory:", os.getcwd())
+print("Write permission:", os.access(os.getcwd(), os.W_OK))
